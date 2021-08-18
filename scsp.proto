@@ -3,6 +3,7 @@ syntax = "proto3";
 service SCSPService {
     rpc Report(ClipBoardMessage) returns (ClipBoardResp);
     rpc Register(RegisterMessage) returns (stream RegisterResp);
+    rpc Ping(PingMessage) returns (PingResp);
 }
 
 message ClipBoardMessage {

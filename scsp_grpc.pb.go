@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 type SCSPServiceClient interface {
 	Report(ctx context.Context, in *ClipBoardMessage, opts ...grpc.CallOption) (*ClipBoardResp, error)
 	Register(ctx context.Context, in *RegisterMessage, opts ...grpc.CallOption) (SCSPService_RegisterClient, error)
+	Ping(ctx context.Context, in *PingMessage, opts ...grpc.CallOption) (*PingResp, error)
 }
 
 type sCSPServiceClient struct {
@@ -71,12 +72,22 @@ func (x *sCSPServiceRegisterClient) Recv() (*RegisterResp, error) {
 	return m, nil
 }
 
+func (c *sCSPServiceClient) Ping(ctx context.Context, in *PingMessage, opts ...grpc.CallOption) (*PingResp, error) {
+	out := new(PingResp)
+	err := c.cc.Invoke(ctx, "/SCSPService/Ping", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SCSPServiceServer is the server API for SCSPService service.
 // All implementations must embed UnimplementedSCSPServiceServer
 // for forward compatibility
 type SCSPServiceServer interface {
 	Report(context.Context, *ClipBoardMessage) (*ClipBoardResp, error)
 	Register(*RegisterMessage, SCSPService_RegisterServer) error
+	Ping(context.Context, *PingMessage) (*PingResp, error)
 	mustEmbedUnimplementedSCSPServiceServer()
 }
 
@@ -89,6 +100,9 @@ func (UnimplementedSCSPServiceServer) Report(context.Context, *ClipBoardMessage)
 }
 func (UnimplementedSCSPServiceServer) Register(*RegisterMessage, SCSPService_RegisterServer) error {
 	return status.Errorf(codes.Unimplemented, "method Register not implemented")
+}
+func (UnimplementedSCSPServiceServer) Ping(context.Context, *PingMessage) (*PingResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 func (UnimplementedSCSPServiceServer) mustEmbedUnimplementedSCSPServiceServer() {}
 
@@ -142,6 +156,24 @@ func (x *sCSPServiceRegisterServer) Send(m *RegisterResp) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _SCSPService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SCSPServiceServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/SCSPService/Ping",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SCSPServiceServer).Ping(ctx, req.(*PingMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SCSPService_ServiceDesc is the grpc.ServiceDesc for SCSPService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +184,10 @@ var SCSPService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Report",
 			Handler:    _SCSPService_Report_Handler,
+		},
+		{
+			MethodName: "Ping",
+			Handler:    _SCSPService_Ping_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
