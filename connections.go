@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wylswz/SCSP/cluster"
 	"k8s.io/klog/v2"
 )
 
@@ -24,11 +23,18 @@ type Connection struct {
 	lastActive int64
 }
 
+func (c *Connection) refresh() {
+	c.lastActive = time.Now().Unix()
+}
+
+func (c *Connection) isValid() bool {
+	return c.lastActive+c.ttl > time.Now().Unix()
+}
+
 // Poll
 // Broadcast
 type ConnectionManager struct {
-	conn           map[string]Connection
-	clusterManager *cluster.ClusterManager
+	conn map[string]Connection
 }
 
 func (cm *ConnectionManager) establish(addr string, ss SCSPService_RegisterServer) error {
@@ -56,12 +62,29 @@ func (cm *ConnectionManager) Broadcast(payload []byte) {
 	}
 }
 
+func (cm *ConnectionManager) Refresh(addr string) {
+	conn, ok := cm.conn[addr]
+	if ok {
+		conn.refresh()
+	}
+}
+
+func (cm *ConnectionManager) Sync() {
+	connLock.Lock()
+	defer connLock.Unlock()
+	for k, con := range cm.conn {
+		if !con.isValid() {
+			delete(cm.conn, k)
+		}
+	}
+}
+
 func GetConnectionManager() *ConnectionManager {
 	globalLock.Lock()
 	defer globalLock.Unlock()
 	if connectionManager == nil {
 		connectionManager = &ConnectionManager{
-			clusterManager: cluster.GetClusterManager(),
+			conn: map[string]Connection{},
 		}
 	}
 	return connectionManager

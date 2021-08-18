@@ -5,11 +5,11 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	klog "k8s.io/klog/v2"
 )
 
 type SCSPServerImpl struct {
 	connectionManager *ConnectionManager
+	server            *grpc.Server
 	UnimplementedSCSPServiceServer
 }
 
@@ -25,21 +25,28 @@ func (s SCSPServerImpl) Report(context.Context, *ClipBoardMessage) (*ClipBoardRe
 	return &ClipBoardResp{}, nil
 }
 
-func NewServerOrDie() SCSPServiceServer {
-	return SCSPServerImpl{
-		connectionManager: GetConnectionManager(),
-	}
+func (s SCSPServerImpl) Ping(ctx context.Context, m *PingMessage) (*PingResp, error) {
+	s.connectionManager.Refresh(m.Address)
+	return &PingResp{}, nil
 }
 
-func ServeOrDie(addr string) {
-	s := grpc.NewServer()
-	listener, err := net.Listen("ipv4", addr)
+func (s *SCSPServerImpl) Serve(addr string) {
+	svc := grpc.NewServer()
+	listener, err := net.Listen("tcp4", addr)
 	if err != nil {
 		panic(err)
 	}
-	klog.Info("Registering services")
-	RegisterSCSPServiceServer(s, NewServerOrDie())
+	RegisterSCSPServiceServer(svc, s)
+	s.server = svc
+	svc.Serve(listener)
+}
 
-	klog.Info("Server started at ", addr)
-	s.Serve(listener)
+func (s SCSPServerImpl) Stop() {
+	s.server.Stop()
+}
+
+func NewServerOrDie() *SCSPServerImpl {
+	return &SCSPServerImpl{
+		connectionManager: GetConnectionManager(),
+	}
 }
