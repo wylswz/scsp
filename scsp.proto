@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+service SCSPService {
+    rpc Report(ClipBoardMessage) returns (ClipBoardResp);
+    rpc Register(RegisterMessage) returns (RegisterResp);
+    rpc Ping(PingMessage) returns (PingResp);
+}
+
+message ClipBoardMessage {
+    uint64 timestamp = 1;
+    bytes  content   = 2;
+}
+
+message ClipBoardResp {}
+
+message RegisterMessage {
+    string address = 1;
+}
+
+message RegisterResp {}
+
+message PingMessage {
+    uint64 timestamp = 1;
+}
+
+message PingResp {}
