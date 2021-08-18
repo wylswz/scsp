@@ -16,12 +16,17 @@ type SCSPServerImpl struct {
 // Register a slave to a master
 // The address is the ip address of client
 func (s SCSPServerImpl) Register(m *RegisterMessage, ss SCSPService_RegisterServer) error {
-	s.connectionManager.establish(m.Address, ss)
+	c, err := s.connectionManager.establish(m.Address, ss)
+	if err != nil {
+		return err
+	}
+	<-c.close
 	return nil
 }
 
 // Report local clipboard to master
-func (s SCSPServerImpl) Report(context.Context, *ClipBoardMessage) (*ClipBoardResp, error) {
+func (s SCSPServerImpl) Report(ctx context.Context, m *ClipBoardMessage) (*ClipBoardResp, error) {
+	s.connectionManager.Broadcast(m.Content, "")
 	return &ClipBoardResp{}, nil
 }
 

@@ -21,6 +21,7 @@ type Connection struct {
 	ss         SCSPService_RegisterServer
 	ttl        int64
 	lastActive int64
+	close      chan bool
 }
 
 func (c *Connection) refresh() {
@@ -37,27 +38,33 @@ type ConnectionManager struct {
 	conn map[string]Connection
 }
 
-func (cm *ConnectionManager) establish(addr string, ss SCSPService_RegisterServer) error {
+func (cm *ConnectionManager) establish(addr string, ss SCSPService_RegisterServer) (Connection, error) {
 	connLock.Lock()
 	defer connLock.Unlock()
 	cm.conn[addr] = Connection{
 		ss:         ss,
 		ttl:        180,
 		lastActive: time.Now().Unix(),
+		close:      make(chan bool),
 	}
-	return nil
+	return cm.conn[addr], nil
 }
 
-func (cm *ConnectionManager) Broadcast(payload []byte) {
+func (cm *ConnectionManager) Broadcast(payload []byte, source string) {
 	connLock.Lock()
 	defer connLock.Unlock()
 	for k, c := range cm.conn {
+		if k == source {
+			// Skip source
+			continue
+		}
 		err := c.ss.Send(&RegisterResp{
 			Payload: payload,
 		})
-		delete(cm.conn, k)
+		klog.Info("Synced: ", string(payload), " to ", k)
 		if err != nil {
 			klog.Error(err)
+			delete(cm.conn, k)
 		}
 	}
 }
@@ -74,6 +81,7 @@ func (cm *ConnectionManager) Sync() {
 	defer connLock.Unlock()
 	for k, con := range cm.conn {
 		if !con.isValid() {
+			con.close <- true
 			delete(cm.conn, k)
 		}
 	}

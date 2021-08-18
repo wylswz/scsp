@@ -1,6 +1,11 @@
 package clipboard
 
-import "sync"
+import (
+	"context"
+	"sync"
+
+	"golang.design/x/clipboard"
+)
 
 var (
 	provider ClipBoardProvider
@@ -9,18 +14,18 @@ var (
 
 type ClipBoardProvider interface {
 	Write([]byte)
-	Chan() chan []byte
+	Chan() <-chan []byte
 }
 
 type XWindowClipBoardProvider struct {
-	c chan []byte
+	c <-chan []byte
 }
 
-func (*XWindowClipBoardProvider) Write([]byte) {
-
+func (*XWindowClipBoardProvider) Write(b []byte) {
+	clipboard.Write(clipboard.FmtText, b)
 }
 
-func (x *XWindowClipBoardProvider) Chan() chan []byte {
+func (x *XWindowClipBoardProvider) Chan() <-chan []byte {
 	return x.c
 }
 
@@ -29,7 +34,7 @@ func GetProvider() ClipBoardProvider {
 	defer lock.Unlock()
 	if provider == nil {
 		provider = &XWindowClipBoardProvider{
-			c: make(chan []byte),
+			c: clipboard.Watch(context.TODO(), clipboard.FmtText),
 		}
 	}
 	return provider

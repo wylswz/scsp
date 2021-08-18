@@ -3,6 +3,7 @@ package scsp
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/wylswz/SCSP/clipboard"
 	"k8s.io/klog/v2"
@@ -27,6 +28,7 @@ func NewSlave(target, advAddress string) *Slave {
 		advAddress: advAddress,
 		client:     NewClientOrDie(target),
 		close:      make(chan bool),
+		active:     true,
 		wg:         sync.WaitGroup{},
 		clipBoard:  clipboard.GetProvider(),
 	}
@@ -41,10 +43,12 @@ func (s *Slave) recv() {
 			break
 		}
 		lock.Unlock()
+		klog.Info("Waiting for messages")
 		resp, err := s.ClientStream.Recv()
 		if err != nil {
 			klog.Error(err)
 		}
+		klog.Info("Recved: ", string(resp.Payload))
 		s.clipBoard.Write(resp.Payload)
 	}
 }
@@ -55,11 +59,15 @@ func (s *Slave) send() {
 	for {
 		select {
 		case content := <-s.clipBoard.Chan():
-			s.client.Report(context.TODO(), &ClipBoardMessage{
+			klog.Info("Try to sync msg", string(content))
+			s.client.Report(context.Background(), &ClipBoardMessage{
 				Content: content,
+				Address: s.advAddress,
 			})
 		case <-s.close:
 			return
+		default:
+			time.Sleep(3 * time.Second)
 		}
 	}
 }

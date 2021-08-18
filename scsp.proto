@@ -9,6 +9,7 @@ service SCSPService {
 message ClipBoardMessage {
     int64 timestamp = 1;
     bytes  content   = 2;
+    string address = 3;
 }
 
 message ClipBoardResp {}
