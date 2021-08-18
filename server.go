@@ -9,13 +9,15 @@ import (
 )
 
 type SCSPServerImpl struct {
+	connectionManager *ConnectionManager
 	UnimplementedSCSPServiceServer
 }
 
 // Register a slave to a master
 // The address is the ip address of client
-func (s SCSPServerImpl) Register(context.Context, *RegisterMessage) (*RegisterResp, error) {
-	return &RegisterResp{}, nil
+func (s SCSPServerImpl) Register(m *RegisterMessage, ss SCSPService_RegisterServer) error {
+	s.connectionManager.establish(m.Address, ss)
+	return nil
 }
 
 // Report local clipboard to master
@@ -23,15 +25,10 @@ func (s SCSPServerImpl) Report(context.Context, *ClipBoardMessage) (*ClipBoardRe
 	return &ClipBoardResp{}, nil
 }
 
-// Ping master for liveness check
-// If master doesn't reveive pings from slave for TTL,
-// it automatically remove slave from registry
-func (s SCSPServerImpl) Ping(context.Context, *PingMessage) (*PingResp, error) {
-	return &PingResp{}, nil
-}
-
 func NewServerOrDie() SCSPServiceServer {
-	return SCSPServerImpl{}
+	return SCSPServerImpl{
+		connectionManager: GetConnectionManager(),
+	}
 }
 
 func ServeOrDie(addr string) {

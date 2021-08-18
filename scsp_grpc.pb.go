@@ -19,8 +19,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SCSPServiceClient interface {
 	Report(ctx context.Context, in *ClipBoardMessage, opts ...grpc.CallOption) (*ClipBoardResp, error)
-	Register(ctx context.Context, in *RegisterMessage, opts ...grpc.CallOption) (*RegisterResp, error)
-	Ping(ctx context.Context, in *PingMessage, opts ...grpc.CallOption) (*PingResp, error)
+	Register(ctx context.Context, in *RegisterMessage, opts ...grpc.CallOption) (SCSPService_RegisterClient, error)
 }
 
 type sCSPServiceClient struct {
@@ -40,22 +39,36 @@ func (c *sCSPServiceClient) Report(ctx context.Context, in *ClipBoardMessage, op
 	return out, nil
 }
 
-func (c *sCSPServiceClient) Register(ctx context.Context, in *RegisterMessage, opts ...grpc.CallOption) (*RegisterResp, error) {
-	out := new(RegisterResp)
-	err := c.cc.Invoke(ctx, "/SCSPService/Register", in, out, opts...)
+func (c *sCSPServiceClient) Register(ctx context.Context, in *RegisterMessage, opts ...grpc.CallOption) (SCSPService_RegisterClient, error) {
+	stream, err := c.cc.NewStream(ctx, &SCSPService_ServiceDesc.Streams[0], "/SCSPService/Register", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &sCSPServiceRegisterClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
 
-func (c *sCSPServiceClient) Ping(ctx context.Context, in *PingMessage, opts ...grpc.CallOption) (*PingResp, error) {
-	out := new(PingResp)
-	err := c.cc.Invoke(ctx, "/SCSPService/Ping", in, out, opts...)
-	if err != nil {
+type SCSPService_RegisterClient interface {
+	Recv() (*RegisterResp, error)
+	grpc.ClientStream
+}
+
+type sCSPServiceRegisterClient struct {
+	grpc.ClientStream
+}
+
+func (x *sCSPServiceRegisterClient) Recv() (*RegisterResp, error) {
+	m := new(RegisterResp)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return m, nil
 }
 
 // SCSPServiceServer is the server API for SCSPService service.
@@ -63,8 +76,7 @@ func (c *sCSPServiceClient) Ping(ctx context.Context, in *PingMessage, opts ...g
 // for forward compatibility
 type SCSPServiceServer interface {
 	Report(context.Context, *ClipBoardMessage) (*ClipBoardResp, error)
-	Register(context.Context, *RegisterMessage) (*RegisterResp, error)
-	Ping(context.Context, *PingMessage) (*PingResp, error)
+	Register(*RegisterMessage, SCSPService_RegisterServer) error
 	mustEmbedUnimplementedSCSPServiceServer()
 }
 
@@ -75,11 +87,8 @@ type UnimplementedSCSPServiceServer struct {
 func (UnimplementedSCSPServiceServer) Report(context.Context, *ClipBoardMessage) (*ClipBoardResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Report not implemented")
 }
-func (UnimplementedSCSPServiceServer) Register(context.Context, *RegisterMessage) (*RegisterResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Register not implemented")
-}
-func (UnimplementedSCSPServiceServer) Ping(context.Context, *PingMessage) (*PingResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+func (UnimplementedSCSPServiceServer) Register(*RegisterMessage, SCSPService_RegisterServer) error {
+	return status.Errorf(codes.Unimplemented, "method Register not implemented")
 }
 func (UnimplementedSCSPServiceServer) mustEmbedUnimplementedSCSPServiceServer() {}
 
@@ -112,40 +121,25 @@ func _SCSPService_Report_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _SCSPService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterMessage)
-	if err := dec(in); err != nil {
-		return nil, err
+func _SCSPService_Register_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RegisterMessage)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(SCSPServiceServer).Register(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/SCSPService/Register",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SCSPServiceServer).Register(ctx, req.(*RegisterMessage))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(SCSPServiceServer).Register(m, &sCSPServiceRegisterServer{stream})
 }
 
-func _SCSPService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PingMessage)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SCSPServiceServer).Ping(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/SCSPService/Ping",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SCSPServiceServer).Ping(ctx, req.(*PingMessage))
-	}
-	return interceptor(ctx, in, info, handler)
+type SCSPService_RegisterServer interface {
+	Send(*RegisterResp) error
+	grpc.ServerStream
+}
+
+type sCSPServiceRegisterServer struct {
+	grpc.ServerStream
+}
+
+func (x *sCSPServiceRegisterServer) Send(m *RegisterResp) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 // SCSPService_ServiceDesc is the grpc.ServiceDesc for SCSPService service.
@@ -159,15 +153,13 @@ var SCSPService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Report",
 			Handler:    _SCSPService_Report_Handler,
 		},
+	},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "Register",
-			Handler:    _SCSPService_Register_Handler,
-		},
-		{
-			MethodName: "Ping",
-			Handler:    _SCSPService_Ping_Handler,
+			StreamName:    "Register",
+			Handler:       _SCSPService_Register_Handler,
+			ServerStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "scsp.proto",
 }
