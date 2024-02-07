@@ -49,7 +49,7 @@ impl Bus for SimpleBus {
     }
 
     fn register_handler(&mut self, h: Arc<dyn MsgHandler>) {
-        self.handlers.append(h.channel().to_string(), h);
+        self.handlers.append_if_absent(h.channel().to_string(), h, |v1, v2| {v1.identity() == v2.identity()});
     }
 
     fn list_handler(&mut self) -> MsgHandlerSummary {
