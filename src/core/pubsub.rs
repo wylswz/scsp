@@ -10,6 +10,7 @@ pub trait MsgHandler: Sync + Send {
     fn channel(&self) -> &str {
         "default"
     }
+    fn close(&mut self);
 }
 
 #[allow(dead_code)]

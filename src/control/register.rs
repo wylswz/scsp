@@ -5,7 +5,6 @@ use std::time::Duration;
 use crate::context::ctx::Context;
 use crate::core::errs;
 use crate::core::pubsub::MsgHandler;
-use rocket::time::Instant;
 use rocket::tokio::select;
 use rocket::tokio::time::{self};
 use rocket::Shutdown;
@@ -19,31 +18,28 @@ struct WebsocketHandler {
     channel: Box<str>,
     msg: Arc<(Mux<Vec<u8>>, Condvar, Mux<bool>)>,
     client_id: Box<str>,
+    closed: bool,
 }
 
 impl WebsocketHandler {
     fn poll(&self) -> Option<Vec<u8>> {
-        let res = self
+        let ready = self.msg.2.lock().unwrap();
+
+        let mut wait_res = self
             .msg
-            .2
-            .lock()
-            .map(|ready: std::sync::MutexGuard<'_, bool>| {
-                let mut wait_res = self
-                    .msg
-                    .1
-                    .wait_timeout(ready, Duration::from_secs(1))
-                    .unwrap();
+            .1
+            .wait_timeout(ready, Duration::from_secs(2))
+            .unwrap();
 
-                if wait_res.1.timed_out() {
-                    return None;
-                }
-                let vec = self.msg.0.lock().unwrap();
+        if wait_res.1.timed_out() {
+            return None;
+        }
 
-                let vec_content = vec.clone();
-                *wait_res.0 = false;
-                Some(vec_content)
-            });
-        res.unwrap()
+        *wait_res.0 = false;
+        let vec = self.msg.0.lock().unwrap();
+
+        let vec_content = vec.clone();
+        Some(vec_content)
     }
 
     fn new(client_id: Box<str>, channel: Box<str>) -> Self {
@@ -51,6 +47,7 @@ impl WebsocketHandler {
             client_id: client_id.clone(),
             channel: channel.clone(),
             msg: Arc::new((Mux::new(vec![]), Condvar::new(), Mux::new(false))),
+            closed: false,
         }
     }
 }
@@ -76,8 +73,17 @@ impl MsgHandler for WebsocketHandler {
     fn channel(&self) -> &str {
         &self.channel
     }
+
+    fn close(&mut self) {
+        self.closed = true;
+    }
 }
 
+/// register a websocket listener on message bus
+/// block until
+/// - application is shut down
+/// - handler is removed from the bus
+/// - message channel is deleted
 #[get("/register?<client_id>&<channel>")]
 #[allow(unused_variables)]
 pub fn register<'r>(
@@ -89,22 +95,24 @@ pub fn register<'r>(
 ) -> Stream!['static] {
     let h = WebsocketHandler::new(Box::from(client_id), Box::from(channel));
     let arc_h = Arc::new(h);
-    _ = ctx.bus.lock().and_then(|mut b| {
+    _ = ctx.bus.write().map(|mut b| {
         b.register_handler(arc_h.clone());
-        Ok(())
+        drop(b);
     });
-    let mut interval = time::interval(Duration::from_millis(20));
+    let mut interval = time::interval(Duration::from_millis(200));
     Stream! { ws =>
         loop {
             select! {
                 _ = interval.tick()  => {
-                    let nxt_msg_res = arc_h.clone().borrow_mut().poll();
+                    if arc_h.clone().borrow_mut().closed {
+                        break;
+                    }
                     // pull message from the handler
-                    match nxt_msg_res {
+                    match arc_h.clone().borrow_mut().poll() {
                         Some(nxt_msg) => {
-                            yield Message::text(String::from_utf8(nxt_msg).unwrap());
+                            yield Message::binary(nxt_msg);
                         },
-                        _ => {}
+                        _ => { /* timeout */ }
                     }
                 },
                 _ = &mut shutdown => {

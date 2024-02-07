@@ -15,6 +15,6 @@ pub struct WriteRequest {
 pub fn write(ctx: &State<Context>, request: Json<WriteRequest>) {
     let _ = ctx
         .bus
-        .lock()
+        .write()
         .map(|mut bus| bus.publish(request.channel.clone(), request.msg.clone()));
 }
