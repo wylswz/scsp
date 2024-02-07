@@ -5,6 +5,7 @@ use std::time::Duration;
 use crate::context::ctx::Context;
 use crate::core::errs;
 use crate::core::pubsub::MsgHandler;
+use rocket::time::Instant;
 use rocket::tokio::select;
 use rocket::tokio::time::{self};
 use rocket::Shutdown;
@@ -92,7 +93,7 @@ pub fn register<'r>(
         b.register_handler(arc_h.clone());
         Ok(())
     });
-    let mut interval = time::interval(Duration::from_secs(1));
+    let mut interval = time::interval(Duration::from_millis(20));
     Stream! { ws =>
         loop {
             select! {
