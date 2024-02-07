@@ -6,10 +6,8 @@ mod control;
 mod core;
 mod data;
 
-use std::borrow::BorrowMut;
-
 use context::ctx::Context;
-use rocket::{Shutdown, State};
+use rocket::Shutdown;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -24,7 +22,7 @@ fn shutdown(shutdown: Shutdown) {
 #[launch]
 fn rocket() -> _ {
     simple_logger::SimpleLogger::new().env().init().unwrap();
-    let mut ctx = Context::init();
+    let ctx = Context::init();
 
     rocket::build().manage(ctx).mount(
         "/",

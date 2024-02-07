@@ -12,11 +12,13 @@ pub trait MsgHandler: Sync + Send {
     }
 }
 
+#[allow(dead_code)]
 pub struct ChannelSummary<'r> {
     handlers: Vec<&'r str>,
     channel: &'r str,
 }
 
+#[allow(dead_code)]
 pub struct MsgHandlerSummary<'r> {
     channels: Vec<ChannelSummary<'r>>,
 }

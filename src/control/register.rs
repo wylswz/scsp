@@ -1,57 +1,23 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::f32::INFINITY;
+use std::borrow::BorrowMut;
 use std::sync::{Arc, Condvar};
 use std::time::Duration;
 
 use crate::context::ctx::Context;
 use crate::core::errs;
 use crate::core::pubsub::MsgHandler;
-use log::info;
-use rocket::futures::lock::Mutex;
-use rocket::futures::FutureExt;
 use rocket::tokio::select;
 use rocket::tokio::time::{self};
 use rocket::Shutdown;
-use rocket::{serde::json::Json, State};
+use rocket::State;
 use rocket_ws::WebSocket;
 use rocket_ws::{Message, Stream};
-use serde::Deserialize;
+
 use std::sync::Mutex as Mux;
-struct LoggingHandler {
-    channel: Box<str>,
-}
 
 struct WebsocketHandler {
     channel: Box<str>,
     msg: Arc<(Mux<Vec<u8>>, Condvar, Mux<bool>)>,
     client_id: Box<str>,
-}
-
-impl LoggingHandler {
-    fn new() -> Self {
-        LoggingHandler {
-            channel: "default".into(),
-        }
-    }
-
-    fn on_channel(channel: Box<str>) -> Self {
-        LoggingHandler { channel: channel }
-    }
-}
-
-impl MsgHandler for LoggingHandler {
-    fn handle(&self, msg: Vec<u8>) -> Result<(), crate::core::errs::SCSPErr> {
-        info!("from logging handler: {:?}", String::from_utf8(msg));
-        Ok(())
-    }
-
-    fn identity(&self) -> &str {
-        "system"
-    }
-
-    fn channel(&self) -> &str {
-        &self.channel
-    }
 }
 
 impl WebsocketHandler {
@@ -60,7 +26,7 @@ impl WebsocketHandler {
             .msg
             .2
             .lock()
-            .map(|mut ready: std::sync::MutexGuard<'_, bool>| {
+            .map(|ready: std::sync::MutexGuard<'_, bool>| {
                 let mut wait_res = self
                     .msg
                     .1
@@ -146,8 +112,4 @@ pub fn register<'r>(
             }
         }
     }
-}
-
-struct Handler<'a> {
-    identifier: &'a str,
 }

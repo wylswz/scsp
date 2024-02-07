@@ -1,9 +1,6 @@
-use std::borrow::Borrow;
-use std::{borrow::BorrowMut, collections::HashMap, hash::Hash, sync::Arc};
+use std::{borrow::BorrowMut, collections::HashMap, hash::Hash};
 
 use std::sync::{Mutex as Mux, MutexGuard};
-
-use rocket::http::uncased::eq;
 
 #[derive(Debug)]
 pub struct ConcurrentMultiMap<K, V: Send> {
@@ -21,6 +18,7 @@ where
         }
     }
 
+    #[allow(dead_code)]
     pub fn append(&mut self, k: K, v: V) {
         self.touch(k.clone());
         self.do_append(k, v, |_, _| false)
