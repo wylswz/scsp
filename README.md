@@ -1,6 +1,8 @@
 # SCSP
 SCSP is going to be written in rust
 
+![](./arch.png)
+
 ## Server
 SCSP server has a volatile pub/sub mechanism that broadcasts message to all listeners on a given channel.
 
