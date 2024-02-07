@@ -1,11 +1,10 @@
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
 
-
-mod data;
+mod context;
 mod control;
 mod core;
-mod context;
-
+mod data;
 
 use std::borrow::BorrowMut;
 
@@ -27,12 +26,13 @@ fn rocket() -> _ {
     simple_logger::SimpleLogger::new().env().init().unwrap();
     let mut ctx = Context::init();
 
-    rocket::build()
-    .manage(ctx)
-    .mount("/", routes![
+    rocket::build().manage(ctx).mount(
+        "/",
+        routes![
             shutdown,
             index,
             data::writer::write,
             control::register::register
-        ])
+        ],
+    )
 }

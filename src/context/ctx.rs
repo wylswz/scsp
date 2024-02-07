@@ -4,14 +4,14 @@ use crate::core::pubsub::{Bus, SimpleBus};
 
 pub struct Context {
     pub bus: Arc<Mutex<dyn Bus>>,
-    pub terminated: AtomicBool
+    pub terminated: AtomicBool,
 }
 
 impl Context {
-    pub fn init() -> Self{
+    pub fn init() -> Self {
         Context {
             bus: Arc::new(Mutex::new(SimpleBus::new())),
-            terminated: AtomicBool::new(false)
+            terminated: AtomicBool::new(false),
         }
     }
 }
