@@ -102,22 +102,15 @@ pub fn register<'r>(
     let mut interval = time::interval(Duration::from_millis(200));
     Stream! { ws =>
         loop {
-            select! {
-                _ = interval.tick()  => {
-                    if arc_h.clone().borrow_mut().closed {
-                        break;
-                    }
-                    // pull message from the handler
-                    match arc_h.clone().borrow_mut().poll() {
-                        Some(nxt_msg) => {
-                            yield Message::binary(nxt_msg);
-                        },
-                        _ => { /* timeout */ }
-                    }
+            if arc_h.clone().borrow_mut().closed {
+                break;
+            }
+            // pull message from the handler
+            match arc_h.clone().borrow_mut().poll() {
+                Some(nxt_msg) => {
+                    yield Message::binary(nxt_msg);
                 },
-                _ = &mut shutdown => {
-                    break;
-                }
+                _ => { /* timeout */ }
             }
         }
     }

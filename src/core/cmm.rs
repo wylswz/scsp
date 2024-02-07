@@ -1,6 +1,7 @@
 use std::{borrow::BorrowMut, collections::HashMap, hash::Hash};
 
-use std::sync::{Mutex as Mux, MutexGuard};
+use std::sync::{RwLock as Mux, MutexGuard, RwLockReadGuard};
+
 
 #[derive(Debug)]
 pub struct ConcurrentMultiMap<K, V: Send> {
@@ -37,9 +38,9 @@ where
         })
     }
 
-    fn with_key(&mut self, k: &K, callback: impl Fn(MutexGuard<Vec<V>>)) {
-        let _ = self.m.borrow_mut().lock().map(|m| {
-            m.get(k).map(Mux::lock).map(|lr| {
+    fn with_key(&mut self, k: &K, callback: impl Fn(RwLockReadGuard<Vec<V>>)) {
+        let _ = self.m.borrow_mut().read().map(|m| {
+            m.get(k).map(Mux::read).map(|lr| {
                 let _ = lr.map(|inner_vec| {
                     callback(inner_vec);
                 });
@@ -48,8 +49,8 @@ where
     }
 
     fn do_append(&mut self, k: K, v: V, eq: impl Fn(&V, &V) -> bool) {
-        let _ = self.m.borrow_mut().lock().map(|inner| {
-            inner.get(&k).map(Mux::lock).map(|f| {
+        let _ = self.m.borrow_mut().write().map(|inner| {
+            inner.get(&k).map(Mux::write).map(|f| {
                 f.map(|mut inner_vec| {
                     let existing = inner_vec.iter().any(|item| eq(item, &v));
                     if !existing {
@@ -61,7 +62,7 @@ where
     }
 
     fn touch(&mut self, k: K) {
-        let _ = self.m.borrow_mut().lock().map(|mut inner| {
+        let _ = self.m.borrow_mut().write().map(|mut inner| {
             if !inner.contains_key(&k) {
                 inner.insert(k, Mux::new(vec![]));
             }
