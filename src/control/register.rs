@@ -1,24 +1,30 @@
 use std::borrow::BorrowMut;
+use std::future::IntoFuture;
 use std::sync::{Arc, Condvar};
 use std::time::Duration;
 
 use crate::context::ctx::Context;
-use crate::core::errs;
+use crate::core::consts::MSG_PING;
 use crate::core::pubsub::MsgHandler;
+use crate::core::{self, errs};
+use log::info;
+use rocket::futures::future::BoxFuture;
+use rocket::futures::stream::FusedStream;
+use rocket::futures::{SinkExt, TryStreamExt};
 use rocket::tokio::select;
 use rocket::tokio::time::{self};
 use rocket::Shutdown;
 use rocket::State;
-use rocket_ws::WebSocket;
+use rocket_ws::{Channel, WebSocket};
 use rocket_ws::{Message, Stream};
 
-use std::sync::Mutex as Mux;
+use std::sync::{Mutex as Mux, RwLock};
 
 struct WebsocketHandler {
     channel: Box<str>,
     msg: Arc<(Mux<Vec<u8>>, Condvar, Mux<bool>)>,
     client_id: Box<str>,
-    closed: bool,
+    closed: RwLock<bool>,
 }
 
 impl WebsocketHandler {
@@ -47,7 +53,7 @@ impl WebsocketHandler {
             client_id: client_id.clone(),
             channel: channel.clone(),
             msg: Arc::new((Mux::new(vec![]), Condvar::new(), Mux::new(false))),
-            closed: false,
+            closed: RwLock::new(false),
         }
     }
 }
@@ -74,8 +80,13 @@ impl MsgHandler for WebsocketHandler {
         &self.channel
     }
 
-    fn close(&mut self) {
-        self.closed = true;
+    fn close(&self) {
+        let mut closed_ref = self.closed.write().unwrap();
+        *closed_ref = true;
+    }
+
+    fn is_closed(&self) -> bool {
+        *self.closed.read().unwrap()
     }
 }
 
@@ -92,26 +103,40 @@ pub fn register<'r>(
     channel: &str,
     ws: WebSocket,
     mut shutdown: Shutdown,
-) -> Stream!['static] {
+) -> Channel<'static> {
     let h = WebsocketHandler::new(Box::from(client_id), Box::from(channel));
     let arc_h = Arc::new(h);
     _ = ctx.bus.write().map(|mut b| {
         b.register_handler(arc_h.clone());
         drop(b);
     });
-    let mut interval = time::interval(Duration::from_millis(200));
-    Stream! { ws =>
-        loop {
-            if arc_h.clone().borrow_mut().closed {
-                break;
+
+    ws.channel(|mut c| {
+        Box::pin(async move {
+            loop {
+                if c.is_terminated() {
+                    arc_h.clone().close();
+                }
+
+                if arc_h.clone().is_closed() {
+                    break;
+                }
+
+                // pull message from the handler
+                match arc_h.clone().borrow_mut().poll() {
+                    Some(nxt_msg) => {
+                        let send_res = c.send(Message::binary(nxt_msg)).await;
+                        match send_res {
+                            Err(_) => {
+                                arc_h.clone().close();
+                            }
+                            _ => {}
+                        };
+                    }
+                    _ => { /* timeout */ }
+                }
             }
-            // pull message from the handler
-            match arc_h.clone().borrow_mut().poll() {
-                Some(nxt_msg) => {
-                    yield Message::binary(nxt_msg);
-                },
-                _ => { /* timeout */ }
-            }
-        }
-    }
+            Ok(())
+        })
+    })
 }

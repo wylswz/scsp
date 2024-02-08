@@ -1,0 +1,9 @@
+[package]
+name = "scsp-agent"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "agent"
+path = "src/agent.rs"
+scsp = {path = "../..", version="0.1.0"}

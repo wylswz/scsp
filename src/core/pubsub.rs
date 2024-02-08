@@ -10,7 +10,8 @@ pub trait MsgHandler: Sync + Send {
     fn channel(&self) -> &str {
         "default"
     }
-    fn close(&mut self);
+    fn close(&self);
+    fn is_closed(&self) -> bool;
 }
 
 #[allow(dead_code)]
@@ -44,6 +45,9 @@ impl SimpleBus {
 
 impl Bus for SimpleBus {
     fn publish(&mut self, channel: String, msg: Vec<u8>) {
+        // lazily remove closed handlers
+        self.handlers
+            .remove_if(channel.to_owned(), |v| v.is_closed());
         self.handlers.for_each(channel, |h| {
             // TODO: log
             let _ = h.handle(msg.clone());
