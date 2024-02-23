@@ -13,6 +13,12 @@ serde = "1.0.194"
 log = "0.4"
 simple_logger = "4.3.3"
 
+# https://docs.rs/reqwest/latest/reqwest/
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+# https://docs.rs/websocket/latest/websocket/client/builder/struct.ClientBuilder.html
+websocket = "0.27.0"
+url = "2.5.0"
+
 [workspace]
 members = ["crates/*"]
 

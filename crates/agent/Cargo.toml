@@ -6,4 +6,8 @@ edition = "2021"
 [[bin]]
 name = "agent"
 path = "src/agent.rs"
+
+[dependencies]
 scsp = {path = "../..", version="0.1.0"}
+log = "0.4"
+simple_logger = "4.3.3"
