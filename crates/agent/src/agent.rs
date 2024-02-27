@@ -1,5 +1,6 @@
 use log::{error, info};
 use scsp::client::client::{Client, DefaultClient};
+use scsp::utils;
 use std::env;
 
 pub fn main() {
