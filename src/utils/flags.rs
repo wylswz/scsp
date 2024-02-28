@@ -1,6 +1,8 @@
 use core::cell::RefCell;
 use regex::{Regex, Replacer};
 use std::collections::HashMap;
+use std::str::FromStr;
+use std::vec;
 use std::{
     env::{self, Args},
     rc::Rc,
@@ -48,6 +50,11 @@ impl Parser {
                 }
             }
         }
+        if !is_key {
+            // there should be even number of args
+            // to form strict key-val pair
+            return Err(SCSPErr::new("invalid number of args"));
+        }
         Ok(res)
     }
 
@@ -64,15 +71,35 @@ impl Parser {
         self.abbrev_mappings.borrow().get(key).map(String::clone)
     }
 
+    pub fn find_i64(&self, key: &str) -> Option<i64> {
+        self.find_num::<i64>(key)
+    }
+
+    pub fn find_num<T: FromStr>(&self, key: &str) -> Option<T> {
+        let m = self.find(key);
+        m.map(|s| {
+            let parsed = s.parse::<T>();
+            if parsed.is_err() {
+                None
+            } else {
+                match parsed {
+                    Ok(val) => Some(val),
+                    _ => None,
+                }
+            }
+        })
+        .flatten()
+    }
+
     fn is_abbrev(token: &str) -> bool {
         // TODO: compile once
-        let pattern = Regex::new(r"^-[a-zA-Z0-9]{1}").unwrap();
+        let pattern = Regex::new(r"^-[a-zA-Z0-9]{1}$").unwrap();
         pattern.is_match(token)
     }
 
     fn is_full(token: &str) -> bool {
         // TODO: compile once
-        let pattern = Regex::new(r"^--[a-zA-Z0-9]+").expect("failed to compile pattern");
+        let pattern = Regex::new(r"^--[\-a-zA-Z0-9]+").expect("failed to compile pattern");
         pattern.is_match(token)
     }
 }
@@ -80,12 +107,44 @@ impl Parser {
 #[test]
 fn test_parser() {
     let parser = Parser::new(
-        vec!["--k1", "v1", "--k2", "v2", "-h", "127.0.0.1", "-p", "8080"]
-            .into_iter()
-            .map(|s| String::from(s)),
+        vec![
+            "--k1",
+            "v1",
+            "--k2",
+            "v2",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            "8080",
+            "--num1",
+            "1",
+            "--long-arg",
+            "long-val",
+        ]
+        .into_iter()
+        .map(|s| String::from(s)),
     )
     .unwrap();
 
     assert_eq!("v1", parser.find("k1").unwrap().as_str());
     assert_eq!("127.0.0.1", parser.find_abbrev("h").unwrap().as_str());
+    assert_eq!(1, parser.find_i64("num1").unwrap());
+    assert_eq!("long-val", parser.find("long-arg").unwrap());
+    assert_eq!(None, parser.find("non-exist"));
+}
+
+#[test]
+fn test_illegal_abbrev() {
+    let illegal_parser = Parser::new(
+        vec!["-illegal-arg", ""]
+            .into_iter()
+            .map(|s| String::from(s)),
+    );
+    assert!(illegal_parser.is_err());
+}
+
+#[test]
+fn test_unbalance_arg() {
+    let illegal_parser2 = Parser::new(vec!["--illegal-arg"].into_iter().map(|s| String::from(s)));
+    assert!(illegal_parser2.is_err());
 }
