@@ -32,7 +32,7 @@ pub fn rocket() -> _ {
     let _ = args.next();
 
     let parser = Parser::new(args).expect("failed to parse args");
-    let port = parser.find_num::<u16>(FLAG_PORT).unwrap_or(DEFAULT_PORT);
+    let port = parser.find_either_num::<u16>(FLAG_PORT, FLAG_PORT_ABBREV).unwrap_or(DEFAULT_PORT);
 
     // TODO: configurable port
     rocket::build()

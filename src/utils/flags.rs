@@ -1,5 +1,6 @@
 use core::cell::RefCell;
 use regex::{Regex, Replacer};
+use rocket::time::format_description::parse;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::vec;
@@ -77,18 +78,32 @@ impl Parser {
 
     pub fn find_num<T: FromStr>(&self, key: &str) -> Option<T> {
         let m = self.find(key);
-        m.map(|s| {
-            let parsed = s.parse::<T>();
-            if parsed.is_err() {
-                None
-            } else {
-                match parsed {
-                    Ok(val) => Some(val),
-                    _ => None,
-                }
-            }
-        })
+        m.map(Self::parse_num)
         .flatten()
+    }
+
+    /// find value by giving both full and abbrev key
+    /// key_full has higher priority
+    /// return None only if neither of the keys have value associated
+    pub fn find_either(&self, key_full: &str, key_abbrev: &str) -> Option<String> {
+        self.find(key_full).or(self.find_abbrev(key_abbrev))
+    }
+
+    /// same as find_either
+    pub fn find_either_num<T: FromStr>(&self, key_full: &str, key_abbrev: &str) -> Option<T> {
+        self.find_either(key_full, key_abbrev).map(Self::parse_num).flatten()
+    }
+
+    fn parse_num<T: FromStr>(s: String) -> Option<T> {
+        let parsed = s.parse::<T>();
+        if parsed.is_err() {
+            None
+        } else {
+            match parsed {
+                Ok(val) => Some(val),
+                _ => None,
+            }
+        }
     }
 
     fn is_abbrev(token: &str) -> bool {
@@ -120,6 +135,7 @@ fn test_parser() {
             "1",
             "--long-arg",
             "long-val",
+            "-l", "3"
         ]
         .into_iter()
         .map(|s| String::from(s)),
@@ -128,9 +144,12 @@ fn test_parser() {
 
     assert_eq!("v1", parser.find("k1").unwrap().as_str());
     assert_eq!("127.0.0.1", parser.find_abbrev("h").unwrap().as_str());
-    assert_eq!(1, parser.find_i64("num1").unwrap());
+    assert_eq!(1, parser.find_either_num::<u16>("num1", "n").unwrap());
     assert_eq!("long-val", parser.find("long-arg").unwrap());
     assert_eq!(None, parser.find("non-exist"));
+
+    assert_eq!(3, parser.find_either_num::<u16>("level", "l").unwrap())
+
 }
 
 #[test]
