@@ -20,6 +20,11 @@ SCSP agent sends and consumes message via client. It also syncs message from/to 
 ```bash
 cargo run --package=scsp-server --bin=server
 ```
+### Server args
+```
+--port -p: port number
+```
+
 
 ## Start agent
 
