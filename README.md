@@ -12,6 +12,12 @@ SCSP client can either register listeners on server or publish message to some c
 ## Agent
 SCSP agent sends and consumes message via client. It also syncs message from/to clipboard. 
 
+# Build SCSP
+
+```bash
+cargo build --workspace
+```
+
 # Start SCSP
 
 `TODO: add command line arguments`
