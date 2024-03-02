@@ -19,6 +19,7 @@ reqwest = { version = "0.11", features = ["blocking", "json"] }
 websocket = "0.27.0"
 url = "2.5.0"
 regex = "1.10.3"
+arboard = "3.1.1"
 
 [workspace]
 members = ["crates/*"]

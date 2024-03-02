@@ -1,0 +1,7 @@
+struct AgentApplication {
+
+}
+
+impl AgentApplication {
+    
+}

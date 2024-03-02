@@ -7,3 +7,4 @@ pub mod control;
 pub mod core;
 pub mod data;
 pub mod utils;
+pub mod clip;

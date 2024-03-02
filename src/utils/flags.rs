@@ -82,9 +82,9 @@ impl Parser {
         .flatten()
     }
 
-    /// find value by giving both full and abbrev key
-    /// key_full has higher priority
-    /// return None only if neither of the keys have value associated
+    /// find value matched by either full key or abbrev key
+    /// key_full has higher priority, i.e., if key_full matches, key_abbrev is 
+    /// ignored even if there's a value associated with it.
     pub fn find_either(&self, key_full: &str, key_abbrev: &str) -> Option<String> {
         self.find(key_full).or(self.find_abbrev(key_abbrev))
     }
