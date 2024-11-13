@@ -1,10 +1,8 @@
 use std::borrow::BorrowMut;
-use std::future::IntoFuture;
 use std::sync::{Arc, Condvar};
 use std::time::Duration;
 
 use crate::context::ctx::Context;
-use crate::core::consts::MSG_PING;
 use crate::core::pubsub::MsgHandler;
 use crate::core::{self, errs};
 use log::info;

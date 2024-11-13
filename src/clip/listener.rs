@@ -45,7 +45,7 @@ impl ClipListener {
     /// watch for clipboard change
     /// block until stop is called
     pub fn watch(&self, onText: impl Fn(Vec<u8>), onImg: impl Fn(Vec<u8>)) {
-        let mut c = Clipboard::new().unwrap();
+        let mut c: Clipboard = Clipboard::new().unwrap();
         while !self.stopped {
             self.get_image_change().map(|img| {
                 let bts: Vec<u8> = self.deser.serialize_image(&img);
