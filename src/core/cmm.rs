@@ -34,6 +34,7 @@ where
         self.do_append(k, v, eq)
     }
 
+    /// for each key, invoke a callback that mutates external state based on associated value
     pub fn for_each(&self, k: K, mut callback: impl FnMut(&V)) {
         self.with_key(&k, |v| {
             for item in v.iter() {
@@ -42,6 +43,7 @@ where
         })
     }
 
+    /// for each key, invoke a callback that mutates associated value
     pub fn for_each_mut(&mut self, k: K, callback: impl Fn(&V)) {
         self.with_key_mut(&k, |v| {
             for item in v.iter() {
@@ -62,6 +64,7 @@ where
         })
     }
 
+    /// invoke a callback that mutates external state based on associated value of given key
     fn with_key(&self, k: &K, mut callback: impl FnMut(RwLockWriteGuard<Vec<V>>)) {
         let _ = self.m.read().map(|m| {
             m.get(k).map(Mux::write).map(|lr| {
@@ -72,6 +75,7 @@ where
         });
     }
 
+    /// invoke a callback that mutates associated value of given key
     fn with_key_mut(&mut self, k: &K, callback: impl Fn(RwLockWriteGuard<Vec<V>>)) {
         let _ = self.m.read().map(|m| {
             m.get(k).map(Mux::write).map(|lr| {
