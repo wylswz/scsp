@@ -110,6 +110,7 @@ impl  ClipListener {
     /// return text if 
     /// - there's non-zero text content in clipboard
     /// - that content differs from last_text
+    /// this method doesn't block
     fn get_text_change(&self) -> Option<String> {
         let last_txt = self.last_text.take();
         match self.c.borrow_mut().get_text() {
@@ -135,6 +136,7 @@ impl  ClipListener {
         }
     }
 
+    /// same as get_text_change
     fn get_image_change(&self) -> Option<ImageData> {
         let last_image = self.last_image.take();
         match self.c.borrow_mut().get_image() {
