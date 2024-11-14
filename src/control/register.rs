@@ -100,16 +100,16 @@ pub fn register<'r>(
     client_id: &str,
     channel: &str,
     ws: WebSocket,
-    mut shutdown: Shutdown,
+    shutdown: Shutdown,
 ) -> Channel<'static> {
-    let h = WebsocketHandler::new(Box::from(client_id), Box::from(channel));
+    let h: WebsocketHandler = WebsocketHandler::new(Box::from(client_id), Box::from(channel));
     let arc_h = Arc::new(h);
     _ = ctx.bus.write().map(|mut b| {
         b.register_handler(arc_h.clone());
         drop(b);
     });
 
-    ws.channel(|mut c| {
+    ws.channel(|mut c: rocket_ws::stream::DuplexStream| {
         Box::pin(async move {
             loop {
                 if c.is_terminated() {

@@ -6,7 +6,7 @@ use std::env;
 use rocket::{Config, Shutdown};
 use scsp::context::ctx::Context;
 use scsp::utils::flags::Parser;
-use scsp::{control, data};
+use scsp::{control};
 
 static FLAG_PORT: &'static str = "port";
 static FLAG_PORT_ABBREV: &'static str = "p";
@@ -46,8 +46,9 @@ pub fn rocket() -> _ {
             routes![
                 shutdown,
                 index,
-                data::writer::write,
-                control::register::register
+                control::writer::write,
+                control::register::register,
+                control::info::info
             ],
         )
 }
