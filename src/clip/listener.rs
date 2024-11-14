@@ -1,6 +1,8 @@
-use std::{borrow::{Borrow, Cow}, hash::Hash, vec};
+use core::time;
+use std::{borrow::{Borrow, Cow}, cell::{Cell, RefCell}, hash::Hash, rc::Rc, thread, vec};
 
 use arboard::{Clipboard, ImageData};
+use rocket::futures::io::Empty;
 
 static MASK_BASE:u64 = 0x0000_0000_0000_00ff;
 static MASK_6:u64 = MASK_BASE << 8;
@@ -20,6 +22,35 @@ static SHIFT_5: u8 = 16;
 static SHIFT_6: u8 = 8;
 
 
+trait MaybeZero<T> {
+    fn is_zero(&self) -> bool;
+    fn zero() -> T;
+}
+
+impl <'a> MaybeZero<ImageData<'a>> for ImageData<'a> {
+    fn is_zero(&self) -> bool {
+        self.width == 0
+    }
+    
+    fn zero() -> ImageData<'a> {
+        ImageData{width: 0, height: 0, bytes: Cow::from([].as_ref())}
+    }
+}
+
+impl MaybeZero<String> for String {
+    fn is_zero(&self) -> bool {
+        self.len() == 0
+    }
+    
+    fn zero() -> String {
+        return String::from("");
+    }
+}
+
+trait AbstractClipboard {
+
+}
+
 trait ClipDeser {
     fn serialize_text(&self, text: String) -> Vec<u8>;
 
@@ -36,25 +67,39 @@ struct DefaultDeser {}
 
 pub struct ClipListener {
     stopped: bool,
-    deser: dyn ClipDeser
+    last_image: Cell<Vec<u8>>,
+    last_text: Cell<Vec<u8>>,
+    deser: DefaultDeser,
+    c: RefCell<Clipboard>
 }
 
 
-impl ClipListener {
+impl  ClipListener {
+
+    pub fn new() -> ClipListener {
+        let deser = DefaultDeser{};
+        ClipListener{
+            stopped: false,
+            last_image: Cell::new(deser.serialize_image(&ImageData::zero())),
+            last_text: Cell::new(deser.serialize_text(String::zero())),
+            deser: deser,
+            c: RefCell::new(Clipboard::new().unwrap())
+        }
+    }
 
     /// watch for clipboard change
     /// block until stop is called
-    pub fn watch(&self, onText: impl Fn(Vec<u8>), onImg: impl Fn(Vec<u8>)) {
-        let mut c: Clipboard = Clipboard::new().unwrap();
+    pub fn watch(&self, on_text: impl Fn(Vec<u8>), on_img: impl Fn(Vec<u8>)) {
         while !self.stopped {
             self.get_image_change().map(|img| {
                 let bts: Vec<u8> = self.deser.serialize_image(&img);
-                onImg(bts);
+                on_img(bts);
             });
             self.get_text_change().map(|txt| {
                 let bts = self.deser.serialize_text(txt);
-                onText(bts);
+                on_text(bts);
             });
+            thread::sleep(time::Duration::from_millis(20));
         }
     }
 
@@ -62,12 +107,56 @@ impl ClipListener {
         self.stopped = true;
     }
 
+    /// return text if 
+    /// - there's non-zero text content in clipboard
+    /// - that content differs from last_text
     fn get_text_change(&self) -> Option<String> {
-        None
+        let last_txt = self.last_text.take();
+        match self.c.borrow_mut().get_text() {
+            Ok(txt) => {
+                if txt.is_zero() {
+                    self.last_text.set(last_txt);
+                    return None
+                }
+                let txt_raw = self.deser.serialize_text(txt.clone());
+                if txt_raw.eq(&last_txt) {
+                    self.last_text.set(last_txt);
+                    return None
+                } else {
+                    self.last_text.set(txt_raw);
+                    return Some(txt)
+                }
+
+            }
+            Err(_) => {
+                self.last_text.set(self.deser.serialize_text(String::zero()));
+                None
+            }
+        }
     }
 
     fn get_image_change(&self) -> Option<ImageData> {
-        None
+        let last_image = self.last_image.take();
+        match self.c.borrow_mut().get_image() {
+            Ok(img) => {
+                if img.is_zero() {
+                    return None
+                }
+                let img_raw = self.deser.serialize_image(&img);
+                if img_raw.eq(&last_image) {
+                    self.last_image.set(last_image);
+                    return None
+                } else {
+                    self.last_image.set(img_raw);
+                    return Some(img)
+                }
+
+            }
+            Err(e) => {
+                self.last_image.set(self.deser.serialize_image(&ImageData::zero()));
+                None
+            }
+        }
     }
 
     fn hash_txt(&self, text: String) -> u64 {
@@ -172,4 +261,26 @@ fn test_img_deser() {
     assert_eq!(16, new_img.height);
     assert_eq!(32, new_img.width);
     assert_eq!(img.bytes, new_img.bytes);
+}
+
+#[test]
+fn test_get_content() {
+    let listener = ClipListener::new();
+    let _ = listener.c.borrow_mut().set_image(ImageData{
+        width: 1, height: 1, bytes: Cow::from([255,255,255,0].as_ref())
+    });
+
+    let change_1 = listener.get_image_change();
+    let change_2 = listener.get_image_change();
+    assert!(change_2.is_none());
+    assert_eq!([255,255,255,0], change_1.unwrap().bytes.borrow());
+
+    let _ = listener.c.borrow_mut().set_text(Cow::from("1"));
+
+    let change_1 = listener.get_text_change();
+    let change_2 = listener.get_text_change();
+    assert!(change_2.is_none());
+    assert_eq!("1", change_1.unwrap());
+
+
 }
