@@ -39,6 +39,7 @@ pub fn rocket() -> _ {
         .manage(ctx)
         .configure(Config {
             port,
+            workers: 32,
             ..Default::default()
         })
         .mount(

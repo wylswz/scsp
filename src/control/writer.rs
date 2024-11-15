@@ -1,3 +1,4 @@
+use log::info;
 use rocket::serde::json::Json;
 use rocket::serde::Deserialize;
 use rocket::State;
@@ -13,6 +14,7 @@ pub struct WriteRequest {
 
 #[post("/write", data = "<request>")]
 pub fn write(ctx: &State<Context>, request: Json<WriteRequest>) {
+    info!("publishing msg");
     let _ = ctx
         .bus
         .write()

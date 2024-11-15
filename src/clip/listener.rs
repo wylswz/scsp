@@ -1,8 +1,7 @@
 use core::time;
-use std::{borrow::{Borrow, Cow}, cell::{Cell, RefCell}, hash::Hash, rc::Rc, thread, vec};
+use std::{borrow::{Borrow, Cow}, cell::{Cell, RefCell}, thread, vec};
 
 use arboard::{Clipboard, ImageData};
-use rocket::futures::io::Empty;
 
 static MASK_BASE:u64 = 0x0000_0000_0000_00ff;
 static MASK_6:u64 = MASK_BASE << 8;
@@ -45,10 +44,6 @@ impl MaybeZero<String> for String {
     fn zero() -> String {
         return String::from("");
     }
-}
-
-trait AbstractClipboard {
-
 }
 
 trait ClipDeser {
@@ -197,7 +192,7 @@ impl ClipDeser for DefaultDeser {
     }
     
     fn deserialize_text(&self, bts: Vec<u8>) -> String {
-        todo!()
+        String::from_utf8(bts).unwrap_or(String::zero())
     }
     
     fn deserialize_image(&self, bts: Vec<u8>) -> ImageData {

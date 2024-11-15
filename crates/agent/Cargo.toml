@@ -11,3 +11,5 @@ path = "src/agent.rs"
 scsp = {path = "../..", version="0.1.0"}
 log = "0.4"
 simple_logger = "4.3.3"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+tokio = { version = "1", features = ["full"] }

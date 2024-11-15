@@ -1,64 +1,53 @@
-use std::borrow::BorrowMut;
 use std::sync::{Arc, Condvar};
 use std::time::Duration;
 
 use crate::context::ctx::Context;
+use crate::core::data::MsgResponse;
 use crate::core::pubsub::MsgHandler;
 use crate::core::{self, errs};
-use log::info;
-use rocket::futures::future::BoxFuture;
-use rocket::futures::stream::FusedStream;
-use rocket::futures::{SinkExt, TryStreamExt};
-use rocket::tokio::select;
-use rocket::tokio::time::{self};
-use rocket::Shutdown;
+use rocket::serde::json::Json;
 use rocket::State;
-use rocket_ws::{Channel, WebSocket};
-use rocket_ws::{Message, Stream};
 
 use std::sync::{Mutex as Mux, RwLock};
 
-struct WebsocketHandler {
+struct PoolingHandler {
     channel: Box<str>,
-    msg: Arc<(Mux<Vec<u8>>, Condvar, Mux<bool>)>,
+    msg: Arc<(RwLock<Vec<u8>>, Condvar, Mux<bool>)>,
     client_id: Box<str>,
     closed: RwLock<bool>,
 }
 
-impl WebsocketHandler {
+impl PoolingHandler {
     fn poll(&self) -> Option<Vec<u8>> {
-        let ready = self.msg.2.lock().unwrap();
+            if self.closed.read().unwrap().clone() {
+                return None;
+            }
+            let ready = self.msg.2.lock().unwrap();
 
-        let mut wait_res = self
-            .msg
-            .1
-            .wait_timeout(ready, Duration::from_secs(2))
-            .unwrap();
-
-        if wait_res.1.timed_out() {
-            return None;
-        }
-
-        *wait_res.0 = false;
-        let vec = self.msg.0.lock().unwrap();
-
-        let vec_content = vec.clone();
-        Some(vec_content)
+            let _u = self
+                .msg
+                .1
+                .wait(ready)
+                .unwrap();
+            
+            let vec = self.msg.0.read().unwrap();
+            let vec_content = vec.clone();
+            return Some(vec_content);
     }
 
     fn new(client_id: Box<str>, channel: Box<str>) -> Self {
         Self {
             client_id: client_id.clone(),
             channel: channel.clone(),
-            msg: Arc::new((Mux::new(vec![]), Condvar::new(), Mux::new(false))),
+            msg: Arc::new((RwLock::new(vec![]), Condvar::new(), Mux::new(false))),
             closed: RwLock::new(false),
         }
     }
 }
 
-impl MsgHandler for WebsocketHandler {
+impl MsgHandler for PoolingHandler {
     fn handle(&self, msg: Vec<u8>) -> Result<(), errs::SCSPErr> {
-        let _ = self.msg.0.lock().map(|mut v| {
+        let _ = self.msg.0.write().map(|mut v| {
             v.clear();
             for b in msg {
                 v.push(b);
@@ -66,6 +55,7 @@ impl MsgHandler for WebsocketHandler {
         });
         let mut ready = self.msg.2.lock().unwrap();
         *ready = true;
+        info!("notifying watchers");
         self.msg.1.notify_all();
         Ok(())
     }
@@ -88,6 +78,9 @@ impl MsgHandler for WebsocketHandler {
     }
 }
 
+
+
+
 /// register a websocket listener on message bus
 /// block until
 /// - application is shut down
@@ -95,46 +88,20 @@ impl MsgHandler for WebsocketHandler {
 /// - message channel is deleted
 #[get("/register?<client_id>&<channel>")]
 #[allow(unused_variables)]
-pub fn register<'r>(
-    ctx: &State<Context>,
-    client_id: &str,
-    channel: &str,
-    ws: WebSocket,
-    shutdown: Shutdown,
-) -> Channel<'static> {
-    let h: WebsocketHandler = WebsocketHandler::new(Box::from(client_id), Box::from(channel));
-    let arc_h = Arc::new(h);
+pub fn register<'r>(ctx: &State<Context>, client_id: &str, channel: &str) -> Json<MsgResponse> {
+    let h: PoolingHandler = PoolingHandler::new(Box::from(client_id), Box::from(channel));
+    let arc_h: Arc<PoolingHandler> = Arc::new(h);
     _ = ctx.bus.write().map(|mut b| {
         b.register_handler(arc_h.clone());
-        drop(b);
     });
 
-    ws.channel(|mut c: rocket_ws::stream::DuplexStream| {
-        Box::pin(async move {
-            loop {
-                if c.is_terminated() {
-                    arc_h.clone().close();
-                }
-
-                if arc_h.clone().is_closed() {
-                    break;
-                }
-
-                // pull message from the handler
-                match arc_h.clone().borrow_mut().poll() {
-                    Some(nxt_msg) => {
-                        let send_res = c.send(Message::binary(nxt_msg)).await;
-                        match send_res {
-                            Err(_) => {
-                                arc_h.clone().close();
-                            }
-                            _ => {}
-                        };
-                    }
-                    _ => { /* timeout */ }
-                }
-            }
-            Ok(())
-        })
-    })
+    let res = arc_h.clone().poll();
+    arc_h.clone().close();
+    match res {
+        None => Json::from(MsgResponse{has_msg: false, msg: vec![]}),
+        Some(msg) => {
+            // let _ = arc_h.clone().clone();
+            Json::from(MsgResponse{has_msg: true, msg: msg})
+        }
+    }
 }

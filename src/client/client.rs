@@ -1,35 +1,30 @@
+use std::{borrow::BorrowMut, cell::{Cell, RefCell}, fmt::Debug, future::IntoFuture, io::ErrorKind, sync::RwLock, thread, time::Duration};
+
+use log::info;
 use rocket::http;
 use url::Url;
-use websocket::{ClientBuilder, OwnedMessage};
 
-use crate::core::errs::SCSPErr;
+use crate::core::{data::MsgResponse, errs::SCSPErr};
 
 pub trait Client {
-    fn register(
+    /// register a handler on a channel, keep reading from websocket, until
+    /// connection is closed (by another side)
+    /// cancelled by invoker (by setting sig to a non-zero value)
+    async fn register(
         &self,
         client_id: &str,
         channel: &str,
         handler: impl Fn(Vec<u8>) -> Result<(), SCSPErr>,
+        sig: RwLock<i32>,
     ) -> Result<(), SCSPErr>;
     fn write(&self);
 }
 
 pub struct DefaultClient {
     host: Url,
-    ws_host: Url,
 }
 
 impl DefaultClient {
-    fn infer_ws_host(host: &Url) -> Url {
-        let mut res = host.clone();
-        let _ = res.set_scheme(match host.scheme() {
-            "http" => "ws",
-            "https" => "wss",
-            _ => panic!("should't happen here"),
-        });
-        res
-    }
-
     pub fn new(host: &str) -> Result<DefaultClient, SCSPErr> {
         let res = Url::parse(host);
         if res.is_err() {
@@ -40,45 +35,39 @@ impl DefaultClient {
             return Err(SCSPErr::new("unsupported scheme"));
         }
         Ok(DefaultClient {
-            ws_host: Self::infer_ws_host(&host_url),
             host: host_url,
         })
     }
 }
 
 impl Client for DefaultClient {
-    fn register(
+    async fn register(
         &self,
         client_id: &str,
         channel: &str,
         handler: impl Fn(Vec<u8>) -> Result<(), SCSPErr>,
+        sig: RwLock<i32>
     ) -> Result<(), SCSPErr> {
-        let mut ep = self.ws_host.to_string();
+        let mut ep = self.host.to_string();
 
         ep.push_str("/register");
         let mut url = Url::parse(ep.as_str()).unwrap();
         url.query_pairs_mut()
             .append_pair("client_id", client_id)
             .append_pair("channel", channel);
-        let builder_res = ClientBuilder::new(url.as_str());
-        if builder_res.is_err() {
-            return Err(builder_res.err().unwrap().into());
-        }
-
-        let conn_res = builder_res.unwrap().connect_insecure();
-        if conn_res.is_err() {
-            return Err(SCSPErr::from(conn_res.err().unwrap()));
-        }
-        let mut conn = conn_res.unwrap();
         loop {
-            let res = match conn.recv_message() {
-                Ok(OwnedMessage::Binary(b)) => handler(b),
-                _ => Err(SCSPErr::new("expected binary message")),
-            };
-            if res.is_err() {
-                return res;
+            info!("registering watch");
+            let resp = reqwest::get(url.clone()).await.unwrap().json::<MsgResponse>().await.unwrap();
+            info!("resp {}", resp.has_msg);
+            if resp.has_msg {
+                let res = handler(resp.msg);
+                if res.is_err() {
+                    return res
+                }
             }
         }
+        Ok(())
+
     }
 
     fn write(&self) {

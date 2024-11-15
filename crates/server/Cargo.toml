@@ -9,7 +9,6 @@ path = "src/server.rs"
 
 [dependencies]
 rocket = {version = "0.5.0", features=["json"]}
-rocket_ws = "0.1.0"
 scsp = {path = "../..", version="0.1.0"}
 log = "0.4"
 simple_logger = "4.3.3"
